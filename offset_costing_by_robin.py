@@ -2,10 +2,13 @@
 # Offset Costing by Robin Creative Lab
 # Project: Automated Cost Management Solutions | Department: Offset Print
 
+
 import streamlit as st
 import pandas as pd
 import datetime
 import math
+from fpdf import FPDF
+import base64
 
 # Login credentials
 ADMIN_EMAIL = "robin.ual@gmail.com"
@@ -15,18 +18,9 @@ APPROVAL_CODE = "54321"
 # App settings
 st.set_page_config(page_title="Offset Costing by Robin Creative Lab", layout="wide")
 st.title("Offset Costing by Robin Creative Lab")
-st.caption("Automated Cost Management Solutions - Department: Offset Print")
+st.caption("Automated Cost Management Solutions - Offset Print Department")
 
-st.markdown("""
-**Robin Creative Lab Presents**  
-**Note:** This is a Demonstration with one module. We can customize based on your requirement and your product line.  
-**Contact:**  
-📞 WhatsApp: +88 01746 927 626  
-📧 Email: robin.ual@gmail.com  
-🔗 [LinkedIn Profile](https://linkedin.com/in/syeed-robin)
-""")
-
-# Login System
+# Login system
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_type = ""
@@ -43,7 +37,6 @@ def login_ui():
                 st.session_state.user_type = "admin"
             else:
                 st.sidebar.error("Invalid credentials")
-
     elif option == "Register":
         email = st.sidebar.text_input("New Email")
         password = st.sidebar.text_input("Set Password", type="password")
@@ -53,7 +46,6 @@ def login_ui():
                 st.sidebar.success("Approved. Please login from Admin.")
             else:
                 st.sidebar.error("Invalid approval code")
-
     elif option == "Guest":
         guest_name = st.sidebar.text_input("Your Name")
         guest_email = st.sidebar.text_input("Email")
@@ -68,10 +60,24 @@ if not st.session_state.logged_in:
     st.warning("Please log in to use the application.")
     st.stop()
 
-# Costing Form
+# PDF Generator
+class PDF(FPDF):
+    def header(self):
+        self.set_font("Arial", "B", 12)
+        self.cell(0, 10, "Offset Costing Summary - Robin Creative Lab", ln=True, align="C")
+
+    def chapter_body(self, data_dict):
+        self.set_font("Arial", "", 10)
+        for key, value in data_dict.items():
+            self.cell(0, 10, f"{key}: {value}", ln=True)
+
+    def print_chapter(self, data_dict):
+        self.add_page()
+        self.chapter_body(data_dict)
+
+# Costing form
 with st.form("costing_form"):
     st.subheader("Enter Item Details")
-
     item_name = st.text_input("Item Name")
     width_mm = st.number_input("Width (mm)", min_value=1)
     length_mm = st.number_input("Length (mm)", min_value=1)
@@ -148,3 +154,27 @@ with st.form("costing_form"):
             "SubmittedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }])
         st.download_button("Download CSV", df.to_csv(index=False), file_name="costing_data.csv")
+
+        # PDF Export
+        pdf = PDF()
+        summary_data = {
+            "Item": item_name,
+            "Dimensions (mm)": f"{width_mm} x {length_mm}",
+            "Quantity": quantity,
+            "Production Qty": production_qty,
+            "Paper Type": paper_type,
+            "Paper Price (BDT)": f"{paper_price:.2f}",
+            "Printing Cost (BDT)": f"{printing_cost:.2f}",
+            "Finishing Cost (BDT)": f"{other_cost:.2f}",
+            "Total Cost (BDT)": f"{total_cost:.2f}",
+            "Price per Unit (BDT)": f"{unit_price:.2f}",
+            "Price per Unit (USD)": f"{usd_price:.2f}",
+            "Date": datetime.datetime.now().strftime("%Y-%m-%d"),
+        }
+        pdf.print_chapter(summary_data)
+        pdf_path = "/mnt/data/costing_summary_robin.pdf"
+        pdf.output(pdf_path)
+        with open(pdf_path, "rb") as f:
+            base64_pdf = base64.b64encode(f.read()).decode("utf-8")
+        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+        st.markdown(pdf_display, unsafe_allow_html=True)
